@@ -25,8 +25,6 @@ import org.springframework.context.annotation.Configuration;
 @ComponentScan
 public class RestFiddleApplication {
 
-    private RestFiddleApplication() {}
-
     public static void main(String[] args) throws Exception {
 	SpringApplication.run(RestFiddleApplication.class, args);
     }
