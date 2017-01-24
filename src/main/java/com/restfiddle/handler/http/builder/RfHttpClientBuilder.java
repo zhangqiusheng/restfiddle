@@ -15,9 +15,11 @@
  */
 package com.restfiddle.handler.http.builder;
 
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.client.HttpClients;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -26,17 +28,28 @@ import com.restfiddle.handler.http.auth.DigestAuthHandler;
 
 @Component
 public class RfHttpClientBuilder {
+    private static int TIME_OUT = 30000;
 
     @Autowired
     private DigestAuthHandler digestAuthHandler;
-    
-    public CloseableHttpClient build(RfRequestDTO requestDTO, HttpUriRequest request) {
-	HttpClientBuilder clientBuilder = HttpClientBuilder.create();
-	
-	//Set Digest Authentication
-	digestAuthHandler.setCredentialsProvider(requestDTO, clientBuilder);
 
-	CloseableHttpClient httpClient = clientBuilder.build();
-	return httpClient;
+    public CloseableHttpClient build(RfRequestDTO requestDTO, HttpUriRequest request) {
+        // add  timeout
+        RequestConfig defaultRequestConfig = RequestConfig.custom()
+                .setSocketTimeout(TIME_OUT)
+                .setConnectTimeout(TIME_OUT)
+                .setConnectionRequestTimeout(TIME_OUT)
+                .build();
+
+        HttpClientBuilder clientBuilder = HttpClients.custom();
+        clientBuilder.setDefaultRequestConfig(defaultRequestConfig);
+
+//        HttpClientBuilder clientBuilder = HttpClientBuilder.create();
+//
+//        //Set Digest Authentication
+        digestAuthHandler.setCredentialsProvider(requestDTO, clientBuilder);
+
+        CloseableHttpClient httpClient = clientBuilder.build();
+        return httpClient;
     }
 }
