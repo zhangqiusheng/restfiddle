@@ -323,7 +323,7 @@ public class ApiController {
     }
 
     private String evaluateApiUrl(String envId, String apiUrl) {
-	String regex = "\\{\\{([^\\}\\}]*)\\}\\}";
+	String regex = "\\{\\{([^\\{\\}]*)\\}\\}";
 	Environment env = null;
 	if (envId != null && !envId.isEmpty()) {
 	    env = environmentController.findById(envId);
