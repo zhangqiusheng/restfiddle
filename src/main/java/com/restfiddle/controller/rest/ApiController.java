@@ -75,7 +75,7 @@ import com.restfiddle.util.EntityToDTO;
 @RestController
 @EnableAutoConfiguration
 @ComponentScan
-@Transactional
+//@Transactional
 public class ApiController {
     private static final String HTTP_LOCALHOST_8080_OAUTH_RESPONSE = "http://localhost:8080/oauth/response";
 
