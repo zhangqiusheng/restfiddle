@@ -70,143 +70,148 @@ public class ConversationController {
     private RfResponseRepository rfResponseRepository;
 
     @RequestMapping(value = "/api/conversations", method = RequestMethod.POST, headers = "Accept=application/json")
-    public @ResponseBody
+    public
+    @ResponseBody
     ConversationDTO create(@RequestBody ConversationDTO conversationDTO) {
-	logger.debug("Creating a new item with information: " + conversationDTO);
+        logger.debug("Creating a new item with information: " + conversationDTO);
 
-	RfRequestDTO rfRequestDTO = conversationDTO.getRfRequestDTO();
-	RfResponseDTO rfResponseDTO = new RfResponseDTO();
+        RfRequestDTO rfRequestDTO = conversationDTO.getRfRequestDTO();
+        RfResponseDTO rfResponseDTO = new RfResponseDTO();
 
-	Conversation conversation = ConversationConverter.convertToEntity(rfRequestDTO, rfResponseDTO);
-	conversation.setName(conversationDTO.getName());
-	conversation.setDescription(conversationDTO.getDescription());
-	
-	conversation.setWorkspaceId(conversationDTO.getWorkspaceId());
-	
-	conversation.setCreatedDate(new Date());
-	conversation.setLastModifiedDate(new Date());
-	
-	if(conversationDTO.getNodeDTO() != null )
-	    conversation.setNodeId(conversationDTO.getNodeDTO().getId());
+        Conversation conversation = ConversationConverter.convertToEntity(rfRequestDTO, rfResponseDTO);
+        conversation.setName(conversationDTO.getName());
+        conversation.setDescription(conversationDTO.getDescription());
 
-	rfRequestRepository.save(conversation.getRfRequest());
-	rfResponseRepository.save(conversation.getRfResponse());
+        conversation.setWorkspaceId(conversationDTO.getWorkspaceId());
 
-	conversation = conversationRepository.save(conversation);
+        conversation.setCreatedDate(new Date());
+        conversation.setLastModifiedDate(new Date());
 
-	conversation.getRfRequest().setConversationId(conversation.getId());
-	rfRequestRepository.save(conversation.getRfRequest());
+        if (conversationDTO.getNodeDTO() != null)
+            conversation.setNodeId(conversationDTO.getNodeDTO().getId());
 
-	return EntityToDTO.toDTO(conversation);
+        rfRequestRepository.save(conversation.getRfRequest());
+        rfResponseRepository.save(conversation.getRfResponse());
+
+        conversation = conversationRepository.save(conversation);
+
+        conversation.getRfRequest().setConversationId(conversation.getId());
+        rfRequestRepository.save(conversation.getRfRequest());
+
+        return EntityToDTO.toDTO(conversation);
     }
 
     @RequestMapping(value = "/api/conversations/{conversationId}", method = RequestMethod.DELETE, headers = "Accept=application/json")
-    public @ResponseBody
+    public
+    @ResponseBody
     Conversation delete(@PathVariable("conversationId") String conversationId) {
-	logger.debug("Deleting item with id: " + conversationId);
+        logger.debug("Deleting item with id: " + conversationId);
 
-	Conversation deleted = conversationRepository.findOne(conversationId);
+        Conversation deleted = conversationRepository.findOne(conversationId);
 
-	conversationRepository.delete(deleted);
+        conversationRepository.delete(deleted);
 
-	return deleted;
+        return deleted;
     }
 
     @RequestMapping(value = "/api/conversations", method = RequestMethod.GET)
-    public @ResponseBody
-    PaginatedResponse<ConversationDTO> findAll(@RequestParam(value = "workspaceId", required = false) String workspaceId, 
-	    @RequestParam(value = "search", required = false) String search, 
-	    @RequestParam(value = "page", required = false) Integer page,
-	    @RequestParam(value = "limit", required = false) Integer limit,
-	    @RequestParam(value = "sortBy", required = false) String sortBy) {
-	logger.debug("Finding all items");
+    public
+    @ResponseBody
+    PaginatedResponse<ConversationDTO> findAll(@RequestParam(value = "workspaceId", required = false) String workspaceId,
+                                               @RequestParam(value = "search", required = false) String search,
+                                               @RequestParam(value = "page", required = false) Integer page,
+                                               @RequestParam(value = "limit", required = false) Integer limit,
+                                               @RequestParam(value = "sortBy", required = false) String sortBy) {
+        logger.debug("Finding all items");
 
-	int pageNo = 0;
-	if (page != null && page > 0) {
-	    pageNo = page;
-	}
+        int pageNo = 0;
+        if (page != null && page > 0) {
+            pageNo = page;
+        }
 
-	int numberOfRecords = 10;
-	if (limit != null && limit > 0) {
-	    numberOfRecords = limit;
-	}
-	
-	Sort sort = new Sort(Direction.DESC, "lastModifiedDate");
-	if("name".equals(sortBy)){
-	    sort = new Sort(Direction.ASC, "name");
-	} else if ("lastRun".equals(sortBy)){
-	    sort = new Sort(Direction.DESC, "lastModifiedDate");
-	}else if ("nameDesc".equals(sortBy)){
-	    sort = new Sort(Direction.DESC, "name");
-	}
+        int numberOfRecords = 10;
+        if (limit != null && limit > 0) {
+            numberOfRecords = limit;
+        }
 
-	Pageable pageable = new PageRequest(pageNo, numberOfRecords, sort);
-	Page<Conversation> result = conversationRepository.findConversationsFromWorkspaceByName(workspaceId, search != null ? search : "", pageable);
+        Sort sort = new Sort(Direction.DESC, "lastModifiedDate");
+        if ("name".equals(sortBy)) {
+            sort = new Sort(Direction.ASC, "name");
+        } else if ("lastRun".equals(sortBy)) {
+            sort = new Sort(Direction.DESC, "lastModifiedDate");
+        } else if ("nameDesc".equals(sortBy)) {
+            sort = new Sort(Direction.DESC, "name");
+        }
 
-	List<Conversation> content = result.getContent();
-	
-	List<ConversationDTO> responseContent = new ArrayList<ConversationDTO>();
-	for(Conversation item : content){
-	    responseContent.add(EntityToDTO.toDTO(item));
-	}
+        Pageable pageable = new PageRequest(pageNo, numberOfRecords, sort);
+        Page<Conversation> result = conversationRepository.findConversationsFromWorkspaceByName(workspaceId, search != null ? search : "", pageable);
 
-	PaginatedResponse<ConversationDTO> response = new PaginatedResponse<ConversationDTO>();
-	response.setData(responseContent);
-	response.setLimit(numberOfRecords);
-	response.setPage(pageNo);
-	response.setTotalElements(result.getTotalElements());
-	response.setTotalPages(result.getTotalPages());
+        List<Conversation> content = result.getContent();
 
-	for (Conversation item : content) {
-	    RfRequest rfRequest = item.getRfRequest();
-	    logger.debug(rfRequest.getApiUrl());
-	}
-	return response;
+        List<ConversationDTO> responseContent = new ArrayList<ConversationDTO>();
+        for (Conversation item : content) {
+            responseContent.add(EntityToDTO.toDTO(item));
+        }
+
+        PaginatedResponse<ConversationDTO> response = new PaginatedResponse<ConversationDTO>();
+        response.setData(responseContent);
+        response.setLimit(numberOfRecords);
+        response.setPage(pageNo);
+        response.setTotalElements(result.getTotalElements());
+        response.setTotalPages(result.getTotalPages());
+
+        for (Conversation item : content) {
+            RfRequest rfRequest = item.getRfRequest();
+            logger.debug(rfRequest.getApiUrl());
+        }
+        return response;
     }
 
     @RequestMapping(value = "/api/conversations/{conversationId}", method = RequestMethod.GET)
-    public @ResponseBody
+    public
+    @ResponseBody
     Conversation findById(@PathVariable("conversationId") String conversationId) {
-	logger.debug("Finding item by id: " + conversationId);
+        logger.debug("Finding item by id: " + conversationId);
 
-	return conversationRepository.findOne(conversationId);
+        return conversationRepository.findOne(conversationId);
     }
 
     @RequestMapping(value = "/api/conversations/{conversationId}", method = RequestMethod.PUT, headers = "Accept=application/json")
-    public @ResponseBody
+    public
+    @ResponseBody
     Conversation update(@PathVariable("conversationId") String conversationId, @RequestBody ConversationDTO conversationDTO) {
-	Conversation dbConversation = conversationRepository.findOne(conversationDTO.getId());
-	
-	RfRequestDTO rfRequestDTO = conversationDTO.getRfRequestDTO();
-	RfResponseDTO rfResponseDTO = new RfResponseDTO();
+        Conversation dbConversation = conversationRepository.findOne(conversationDTO.getId());
 
-	Conversation conversation = ConversationConverter.convertToEntity(rfRequestDTO, rfResponseDTO);
-	conversation.setId(dbConversation.getId());
-	
-	conversation.setName(conversationDTO.getName());
-	conversation.setDescription(conversationDTO.getDescription());
-	conversation.setCreatedDate(new Date());
-	conversation.setLastModifiedDate(new Date());
-	if(conversationDTO.getNodeDTO() != null )
-	    conversation.setNodeId(conversationDTO.getNodeDTO().getId());
+        RfRequestDTO rfRequestDTO = conversationDTO.getRfRequestDTO();
+        RfResponseDTO rfResponseDTO = new RfResponseDTO();
 
-	RfRequest rfRequest = conversation.getRfRequest();
-	RfRequest dbRfRequest = dbConversation.getRfRequest();
-	if (dbRfRequest != null) {
-	    rfRequest.setId(dbRfRequest.getId());
-	}
-	rfRequest.setConversationId(conversation.getId());
-	rfRequestRepository.save(rfRequest);
-	
-	RfResponse rfResponse = conversation.getRfResponse();
-	RfResponse dbRfResponse = dbConversation.getRfResponse();
-	if(dbRfResponse != null){
-	    rfResponse.setId(dbRfResponse.getId());
-	}
-	rfResponseRepository.save(rfResponse);
+        Conversation conversation = ConversationConverter.convertToEntity(rfRequestDTO, rfResponseDTO);
+        conversation.setId(dbConversation.getId());
 
-	conversation = conversationRepository.save(conversation);
+        conversation.setName(conversationDTO.getName());
+        conversation.setDescription(conversationDTO.getDescription());
+        conversation.setLastModifiedDate(new Date());
+        if (conversationDTO.getNodeDTO() != null)
+            conversation.setNodeId(conversationDTO.getNodeDTO().getId());
 
-	return conversation;
+        RfRequest rfRequest = conversation.getRfRequest();
+        RfRequest dbRfRequest = dbConversation.getRfRequest();
+        if (dbRfRequest != null) {
+            rfRequest.setId(dbRfRequest.getId());
+            rfRequest.setAssertion(dbRfRequest.getAssertion());
+        }
+        rfRequest.setConversationId(conversation.getId());
+        rfRequestRepository.save(rfRequest);
+
+        RfResponse rfResponse = conversation.getRfResponse();
+        RfResponse dbRfResponse = dbConversation.getRfResponse();
+        if (dbRfResponse != null) {
+            rfResponse.setId(dbRfResponse.getId());
+        }
+        rfResponseRepository.save(rfResponse);
+
+        conversation = conversationRepository.save(conversation);
+
+        return conversation;
     }
 }
