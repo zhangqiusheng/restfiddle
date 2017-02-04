@@ -924,6 +924,12 @@ define(function (require) {
         },
         saveOrUpdateConversation: function () {
             var workspaceId = APP.appView.getCurrentWorkspaceId();
+            var activeNode = TreeView.getActiveNode();
+
+            if(activeNode !=null && activeNode.folder == true){
+                return;
+
+            }
 
             if (APP.appView.getCurrentConversationId() != null) {
                 var rfRequest = {
