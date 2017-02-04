@@ -404,8 +404,21 @@ define(function(require) {
 	$("#createNewRequestBtn").bind("click", function() {
 		if ($('#newRequestForm').valid()) {
 			var conversation = null;
-			if ($("#requestModal").find("#source").val() == 'request') {
-				conversation = new ConversationModel({});
+            var workspaceId = APP.appView.getCurrentWorkspaceId();
+            var rfRequest = {
+                id: this.nodeRfRequest ? this.nodeRfRequest.id : null,
+                apiUrl: '',
+                methodType: 'GET'
+            };
+            var rfResponse = {};
+
+            if ($("#requestModal").find("#source").val() == 'request') {
+				conversation = new ConversationModel({
+                    id: APP.appView.getCurrentConversationId(),
+                    workspaceId: workspaceId,
+                    rfRequestDTO: rfRequest,
+                    rfResponseDTO: rfResponse
+				});
 
 			} else if ($("#requestModal").find("#source").val() == 'conversation') {
 				var rfRequest = {
@@ -1374,7 +1387,7 @@ define(function(require) {
 		} else {
 			params.conversation.save(null, {
 				success : function(response) {
-					createNode(params.nodeName, params.nodeDesc, null, new ConversationModel({
+					createNode(params.nodeName, params.nodeDesc, 'REQUEST', new ConversationModel({
 						id : response.get("id")
 					}), null, params.successCallBack, params.parentNodeId, params.tags);
 				}
@@ -1550,6 +1563,11 @@ define(function(require) {
 			return $("#tree").fancytree("getRootNode").getFirstChild();
 		}
 	};
+
+    tree.getActiveNode = function() {
+        var node = $("#tree").fancytree("getActiveNode");
+        return node;
+    };
 
 	var getParentFolder = function(node) {
 		if (node) {
