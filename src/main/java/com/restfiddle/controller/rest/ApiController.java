@@ -16,6 +16,7 @@
 package com.restfiddle.controller.rest;
 
 import java.net.URISyntaxException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -24,6 +25,8 @@ import java.util.regex.Pattern;
 
 import javax.annotation.Resource;
 
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.time.DateUtils;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.utils.URIBuilder;
 import org.slf4j.Logger;
@@ -106,290 +109,339 @@ public class ApiController {
 
     @Autowired
     private EnvironmentController environmentController;
-    
+
     @Resource
     private ActivityLogRepository activityLogRepository;
 
     @RequestMapping(value = "/api/processor", method = RequestMethod.POST, headers = "Accept=application/json")
     ConversationDTO requestProcessor(@RequestParam(value = "runnerLogId", required = false) String runnerLogId, @RequestBody RfRequestDTO rfRequestDTO) {
-	Conversation existingConversation = null;
-	Conversation currentConversation;
+        Conversation existingConversation = null;
+        Conversation currentConversation;
 
-	// TODO : Get RfRequest Id if present as part of this request and update the existing conversation entity.
-	// Note : New conversation entity which is getting created below is still required for logging purpose.
-	
-	if (rfRequestDTO == null) {
-	    return null;
-	} else if (rfRequestDTO.getId() != null && !rfRequestDTO.getId().isEmpty()) {
-	    RfRequest rfRequest = rfRequestRepository.findOne(rfRequestDTO.getId());
-	    String conversationId = rfRequest != null ? rfRequest.getConversationId() : null;
-	    existingConversation = conversationId != null ? conversationRepository.findOne(conversationId) : null;
-	    // finding updated existing conversation
-	    existingConversation = existingConversation != null ? nodeRepository.findOne(existingConversation.getNodeId()).getConversation() : null;
-	    if(existingConversation != null) {
-	       rfRequestDTO.setAssertionDTO(EntityToDTO.toDTO(existingConversation.getRfRequest().getAssertion()));
-	    }
-	}
-	
-	long startTime = System.currentTimeMillis();
-	RfResponseDTO result = genericHandler.processHttpRequest(rfRequestDTO);
-	long endTime = System.currentTimeMillis();
-	long duration = endTime - startTime;
+        // TODO : Get RfRequest Id if present as part of this request and update the existing conversation entity.
+        // Note : New conversation entity which is getting created below is still required for logging purpose.
 
-	if (result != null) {
-	    String nodeId = null;
-	    if (existingConversation != null && existingConversation.getNodeId() != null) {
-		nodeId = existingConversation.getNodeId();
-	    }
-	    assertHandler.runAssert(result, nodeId);
-	}
+        if (rfRequestDTO == null) {
+            return null;
+        } else if (rfRequestDTO.getId() != null && !rfRequestDTO.getId().isEmpty()) {
+            RfRequest rfRequest = rfRequestRepository.findOne(rfRequestDTO.getId());
+            String conversationId = rfRequest != null ? rfRequest.getConversationId() : null;
+            existingConversation = conversationId != null ? conversationRepository.findOne(conversationId) : null;
+            // finding updated existing conversation
+            existingConversation = existingConversation != null ? nodeRepository.findOne(existingConversation.getNodeId()).getConversation() : null;
+            if (existingConversation != null) {
+                rfRequestDTO.setAssertionDTO(EntityToDTO.toDTO(existingConversation.getRfRequest().getAssertion()));
+            }
+        }
 
-	currentConversation = ConversationConverter.convertToEntity(rfRequestDTO, result);
+        long startTime = System.currentTimeMillis();
+        RfResponseDTO result = genericHandler.processHttpRequest(rfRequestDTO);
+        long endTime = System.currentTimeMillis();
+        long duration = endTime - startTime;
 
-	// This is used to get project-runner/folder-runner logs
-	currentConversation.setRunnerLogId(runnerLogId);
+        if (result != null) {
+            String nodeId = null;
+            if (existingConversation != null && existingConversation.getNodeId() != null) {
+                nodeId = existingConversation.getNodeId();
+            }
+            assertHandler.runAssert(result, nodeId);
+        }
 
-	if (existingConversation != null) {
-	    currentConversation.getRfRequest().setAssertion(existingConversation.getRfRequest().getAssertion());
-	}
+        currentConversation = ConversationConverter.convertToEntity(rfRequestDTO, result);
 
-	rfRequestRepository.save(currentConversation.getRfRequest());
-	rfResponseRepository.save(currentConversation.getRfResponse());
+        // This is used to get project-runner/folder-runner logs
+        currentConversation.setRunnerLogId(runnerLogId);
 
-	currentConversation.setDuration(duration);
+        if (existingConversation != null) {
+            currentConversation.getRfRequest().setAssertion(existingConversation.getRfRequest().getAssertion());
+        }
 
-	Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-	if (principal instanceof User) {
-	    currentConversation.setLastModifiedBy((User) principal);
-	}
+        rfRequestRepository.save(currentConversation.getRfRequest());
+        rfResponseRepository.save(currentConversation.getRfResponse());
 
-	Date currentDate = new Date();
-	currentConversation.setCreatedDate(currentDate);
-	currentConversation.setLastModifiedDate(currentDate);
-	currentConversation.setLastRunDate(currentDate);
-	
-	currentConversation.setName(currentConversation.getRfRequest().getApiUrl());
-	try {
-	    currentConversation = conversationRepository.save(currentConversation);
+        currentConversation.setDuration(duration);
 
-	    currentConversation.getRfRequest().setConversationId(currentConversation.getId());
-	    rfRequestRepository.save(currentConversation.getRfRequest());
-	    
-	    ActivityLog activityLog = null;
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (principal instanceof User) {
+            currentConversation.setLastModifiedBy((User) principal);
+        }
 
-	    // Note : existingConversation will be null if the request was not saved previously.
-	    if (existingConversation != null && existingConversation.getNodeId() != null) {
-		BaseNode node = nodeRepository.findOne(existingConversation.getNodeId());
-		currentConversation.setNodeId(node.getId());
-		currentConversation.setName(node.getName());
-		
-		activityLog = activityLogRepository.findActivityLogByDataId(node.getId());
-	    }
-	    
-	    if (principal instanceof User) {
-		currentConversation.setLastModifiedBy((User) principal);
-	    }
+        Date currentDate = new Date();
+        currentConversation.setCreatedDate(currentDate);
+        currentConversation.setLastModifiedDate(currentDate);
+        currentConversation.setLastRunDate(currentDate);
 
-	    conversationRepository.save(currentConversation);
-	    
-	    if (activityLog == null) {
-	        activityLog = new ActivityLog();
-	        if(existingConversation != null) {
-	           activityLog.setDataId(existingConversation.getNodeId());
-	        }
-	        activityLog.setType("CONVERSATION");
-	    }
-	    
-	    activityLog.setName(currentConversation.getName());
-	    activityLog.setWorkspaceId(currentConversation.getWorkspaceId());
-	    activityLog.setLastModifiedDate(currentDate);
-	    
-	    List<BaseEntity> logData = activityLog.getData();
-	    logData.add(0, currentConversation);
-	    
-	    activityLogRepository.save(activityLog);
+        currentConversation.setName(currentConversation.getRfRequest().getApiUrl());
+        try {
+            currentConversation = conversationRepository.save(currentConversation);
 
-	} catch (InvalidDataAccessResourceUsageException e) {
-	    throw new ApiException("Please use sql as datasource, some of features are not supported by hsql", e);
-	}
-	ConversationDTO conversationDTO = new ConversationDTO();
-	conversationDTO.setWorkspaceId(rfRequestDTO.getWorkspaceId());
-	conversationDTO.setDuration(duration);
-	conversationDTO.setRfResponseDTO(result);
-	if (result != null) {
-	    result.setItemDTO(conversationDTO);
-	}
-	return conversationDTO;
+            currentConversation.getRfRequest().setConversationId(currentConversation.getId());
+            rfRequestRepository.save(currentConversation.getRfRequest());
+
+            ActivityLog activityLog = null;
+
+            // Note : existingConversation will be null if the request was not saved previously.
+            if (existingConversation != null && existingConversation.getNodeId() != null) {
+                BaseNode node = nodeRepository.findOne(existingConversation.getNodeId());
+                currentConversation.setNodeId(node.getId());
+                currentConversation.setName(node.getName());
+
+                activityLog = activityLogRepository.findActivityLogByDataId(node.getId());
+            }
+
+            if (principal instanceof User) {
+                currentConversation.setLastModifiedBy((User) principal);
+            }
+
+            conversationRepository.save(currentConversation);
+
+            if (activityLog == null) {
+                activityLog = new ActivityLog();
+                if (existingConversation != null) {
+                    activityLog.setDataId(existingConversation.getNodeId());
+                }
+                activityLog.setType("CONVERSATION");
+            }
+
+            activityLog.setName(currentConversation.getName());
+            activityLog.setWorkspaceId(currentConversation.getWorkspaceId());
+            activityLog.setLastModifiedDate(currentDate);
+
+            List<BaseEntity> logData = activityLog.getData();
+            logData.add(0, currentConversation);
+
+            activityLogRepository.save(activityLog);
+
+        } catch (InvalidDataAccessResourceUsageException e) {
+            throw new ApiException("Please use sql as datasource, some of features are not supported by hsql", e);
+        }
+        ConversationDTO conversationDTO = new ConversationDTO();
+        conversationDTO.setWorkspaceId(rfRequestDTO.getWorkspaceId());
+        conversationDTO.setDuration(duration);
+        conversationDTO.setRfResponseDTO(result);
+        if (result != null) {
+            result.setItemDTO(conversationDTO);
+        }
+        return conversationDTO;
     }
 
     @RequestMapping(value = "/api/processor/projects/{id}", method = RequestMethod.GET)
-    public @ResponseBody
+    public
+    @ResponseBody
     List<NodeStatusResponseDTO> runProjectById(@PathVariable("id") String id, @RequestParam(value = "envId", required = false) String envId) {
-	logger.debug("Running all requests inside project : " + id);
+        logger.debug("Running all requests inside project : " + id);
 
-	RunnerLogDTO runnerLogDTO = new RunnerLogDTO();
-	// TODO : Set project node id
-	// runnerLogDTO.setNodeId(nodeId);
+        RunnerLogDTO runnerLogDTO = new RunnerLogDTO();
+        // TODO : Set project node id
+        // runnerLogDTO.setNodeId(nodeId);
 
-	RunnerLog log = runnerLogController.create(runnerLogDTO);
+        RunnerLog log = runnerLogController.create(runnerLogDTO);
 
-	List<BaseNode> listOfNodes = nodeRepository.findNodesFromAProject(id);
-	List<NodeStatusResponseDTO> nodeStatuses = runNodes(listOfNodes, envId, log.getId());
-	return nodeStatuses;
+        List<BaseNode> listOfNodes = nodeRepository.findNodesFromAProject(id);
+        List<NodeStatusResponseDTO> nodeStatuses = runNodes(listOfNodes, envId, log.getId());
+        return nodeStatuses;
     }
 
     // Handle environment passing here as above. Passing null as of now
     @RequestMapping(value = "/api/processor/folders/{id}", method = RequestMethod.GET)
-    public @ResponseBody
+    public
+    @ResponseBody
     List<NodeStatusResponseDTO> runFolderById(@PathVariable("id") String id, @RequestParam(value = "envId", required = false) String envId) {
-	logger.debug("Running all requests inside folder : " + id);
+        logger.debug("Running all requests inside folder : " + id);
 
-	RunnerLogDTO runnerLogDTO = new RunnerLogDTO();
-	// TODO : Set project node id
-	// runnerLogDTO.setNodeId(nodeId);
+        RunnerLogDTO runnerLogDTO = new RunnerLogDTO();
+        // TODO : Set project node id
+        // runnerLogDTO.setNodeId(nodeId);
 
-	RunnerLog log = runnerLogController.create(runnerLogDTO);
+        RunnerLog log = runnerLogController.create(runnerLogDTO);
 
-	List<BaseNode> listOfNodes = nodeRepository.getChildren(id);
-	List<NodeStatusResponseDTO> nodeStatuses = runNodes(listOfNodes, envId, log.getId());
-	return nodeStatuses;
+        List<BaseNode> listOfNodes = nodeRepository.getChildren(id);
+        List<NodeStatusResponseDTO> nodeStatuses = runNodes(listOfNodes, envId, log.getId());
+        return nodeStatuses;
     }
 
     private List<NodeStatusResponseDTO> runNodes(List<BaseNode> listOfNodes, String envId, String runnerLogId) {
-	// TODO : Regex is hard-coded for now. User will have the option to choose different regular expressions.
-	// TODO : Need to add the option to change regex in settings (UI).
+        // TODO : Regex is hard-coded for now. User will have the option to choose different regular expressions.
+        // TODO : Need to add the option to change regex in settings (UI).
 
-	List<NodeStatusResponseDTO> nodeStatuses = new ArrayList<NodeStatusResponseDTO>();
-	NodeStatusResponseDTO nodeStatus;
+        List<NodeStatusResponseDTO> nodeStatuses = new ArrayList<NodeStatusResponseDTO>();
+        NodeStatusResponseDTO nodeStatus;
 
-	for (BaseNode baseNode : listOfNodes) {
-	    String nodeType = baseNode.getNodeType();
-	    if (nodeType != null && (NodeType.PROJECT.name().equals(nodeType) || NodeType.FOLDER.name().equals(nodeType))) {
-		continue;
-	    } else {
-		Conversation conversation = baseNode.getConversation();
-		if (conversation != null && conversation.getRfRequest() != null) {
-		    RfRequest rfRequest = conversation.getRfRequest();
-		    String methodType = rfRequest.getMethodType();
-		    String apiUrl = rfRequest.getApiUrl();
-		    String apiBody = rfRequest.getApiBody();
-		    if (methodType != null && !methodType.isEmpty() && apiUrl != null && !apiUrl.isEmpty()) {
-			String evaulatedApiUrl = evaluateApiUrl(envId, apiUrl);
-			RfRequestDTO rfRequestDTO = new RfRequestDTO();
-			rfRequestDTO.setMethodType(methodType);
-			rfRequestDTO.setApiUrl(evaulatedApiUrl);
-			rfRequestDTO.setApiBody(apiBody);
-			rfRequestDTO.setAssertionDTO(EntityToDTO.toDTO(rfRequest.getAssertion()));
+        for (BaseNode baseNode : listOfNodes) {
+            String nodeType = baseNode.getNodeType();
+            if (nodeType != null && (NodeType.PROJECT.name().equals(nodeType) || NodeType.FOLDER.name().equals(nodeType))) {
+                continue;
+            } else {
+                Conversation conversation = baseNode.getConversation();
+                if (conversation != null && conversation.getRfRequest() != null) {
+                    RfRequest rfRequest = conversation.getRfRequest();
+                    String methodType = rfRequest.getMethodType();
+                    String apiUrl = rfRequest.getApiUrl();
+                    String apiBody = rfRequest.getApiBody();
+                    if (methodType != null && !methodType.isEmpty() && apiUrl != null && !apiUrl.isEmpty()) {
+                        String evaulatedApiUrl = evaluateApiUrl(envId, apiUrl);
+                        RfRequestDTO rfRequestDTO = new RfRequestDTO();
+                        rfRequestDTO.setMethodType(methodType);
+                        rfRequestDTO.setApiUrl(evaulatedApiUrl);
+                        rfRequestDTO.setApiBody(apiBody);
+                        rfRequestDTO.setAssertionDTO(EntityToDTO.toDTO(rfRequest.getAssertion()));
 
-			RfResponseDTO rfResponseDTO = requestProcessor(runnerLogId, rfRequestDTO).getRfResponseDTO();
+                        RfResponseDTO rfResponseDTO = requestProcessor(runnerLogId, rfRequestDTO).getRfResponseDTO();
 
-			nodeStatus = new NodeStatusResponseDTO();
-			nodeStatus.setId(baseNode.getId());
-			nodeStatus.setName(baseNode.getName());
-			nodeStatus.setDescription(baseNode.getDescription());
-			nodeStatus.setApiUrl(evaulatedApiUrl);
-			nodeStatus.setMethodType(methodType);
+                        nodeStatus = new NodeStatusResponseDTO();
+                        nodeStatus.setId(baseNode.getId());
+                        nodeStatus.setName(baseNode.getName());
+                        nodeStatus.setDescription(baseNode.getDescription());
+                        nodeStatus.setApiUrl(evaulatedApiUrl);
+                        nodeStatus.setMethodType(methodType);
 
-			int successCount = 0;
-			int failureCount = 0;
-			if (rfResponseDTO != null) {
-			    logger.debug(baseNode.getName() + " ran with status : " + rfResponseDTO.getStatus());
-			    nodeStatus.setStatusCode(rfResponseDTO.getStatus());
-			    nodeStatus.setDuration(rfResponseDTO.getItemDTO().getDuration());
+                        int successCount = 0;
+                        int failureCount = 0;
+                        if (rfResponseDTO != null) {
+                            logger.debug(baseNode.getName() + " ran with status : " + rfResponseDTO.getStatus());
+                            nodeStatus.setStatusCode(rfResponseDTO.getStatus());
+                            nodeStatus.setDuration(rfResponseDTO.getItemDTO().getDuration());
 
-			    // TODO: get AssertionDTO from rfResponseDTO. Get bodyAssertsDTOs and loop through the list to count no. of success
-			    List<BodyAssertDTO> bodyAssertDTOs = rfResponseDTO.getAssertionDTO().getBodyAssertDTOs();
-			    if (bodyAssertDTOs != null) {
-				for (BodyAssertDTO bodyAssertDTO : bodyAssertDTOs) {
-				    if (bodyAssertDTO.isSuccess()) {
-					successCount++;
-				    } else {
-					failureCount++;
-				    }
-				}
-			    }
-			}
-			nodeStatus.setSuccessAsserts(successCount);
-			nodeStatus.setFailureAsserts(failureCount);
+                            // TODO: get AssertionDTO from rfResponseDTO. Get bodyAssertsDTOs and loop through the list to count no. of success
+                            List<BodyAssertDTO> bodyAssertDTOs = rfResponseDTO.getAssertionDTO().getBodyAssertDTOs();
+                            if (bodyAssertDTOs != null) {
+                                for (BodyAssertDTO bodyAssertDTO : bodyAssertDTOs) {
+                                    if (bodyAssertDTO.isSuccess()) {
+                                        successCount++;
+                                    } else {
+                                        failureCount++;
+                                    }
+                                }
+                            }
+                        }
+                        nodeStatus.setSuccessAsserts(successCount);
+                        nodeStatus.setFailureAsserts(failureCount);
 
-			nodeStatuses.add(nodeStatus);
+                        nodeStatuses.add(nodeStatus);
 
-			// TODO : Create ProjectRunnerLog and store nodeId as well as loggedConversationId.
-		    }
-		}
-	    }
-	}
-	return nodeStatuses;
+                        // TODO : Create ProjectRunnerLog and store nodeId as well as loggedConversationId.
+                    }
+                }
+            }
+        }
+        return nodeStatuses;
     }
 
     private String evaluateApiUrl(String envId, String apiUrl) {
-	String regex = "\\{\\{([^\\{\\}]*)\\}\\}";
-	Environment env = null;
-	if (envId != null && !envId.isEmpty()) {
-	    env = environmentController.findById(envId);
-	}
-	if (env != null) {
-	    Pattern p = Pattern.compile(regex);
-	    Matcher m = p.matcher(apiUrl);
-	    String tempUrl;
-	    while (m.find()) {
-		String exprVar = m.group(1);
-		String propVal = env.getPropertyValueByName(exprVar);
-		tempUrl = apiUrl.replaceFirst(regex, propVal);
-		apiUrl = tempUrl;
-	    }
-	}
-	return apiUrl;
+        String regex = "\\{\\{([^\\{\\}]*)\\}\\}";
+        Environment env = null;
+        if (envId != null && !envId.isEmpty()) {
+            env = environmentController.findById(envId);
+        }
+        if (env != null) {
+            Pattern p = Pattern.compile(regex);
+            Matcher m = p.matcher(apiUrl);
+            String tempUrl;
+            while (m.find()) {
+                String exprVar = m.group(1);
+                String propVal = env.getPropertyValueByName(exprVar);
+
+                String replacedVal = replacedValue(propVal);
+
+                tempUrl = apiUrl.replaceFirst(regex, replacedVal);
+                apiUrl = tempUrl;
+            }
+        }
+        return apiUrl;
+    }
+
+    private final static SimpleDateFormat dayFormatter = new SimpleDateFormat("yyyy-MM-dd");
+    private final static SimpleDateFormat hourFormatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+
+    /**
+     * 替换参数中的“[整数d]/[整数h]”
+     * 例如：[1d]: 当前时间增加一天；[-1d]:当前时间减一天；
+     * [1h]:当前时间增加1小时；[-1h]:当前时间减一天。
+     * @param originString 原字符串
+     * @return 替换后的时间字符串
+     */
+    private String replacedValue(String originString) {
+        if (StringUtils.isEmpty(originString) || !(originString.startsWith("[") && originString.endsWith("]"))) {
+            return originString;
+        }
+
+        String inputString = originString.substring(1, originString.length() - 1);
+        if (StringUtils.isEmpty(inputString)) {
+            return originString;
+        }
+
+        try {
+            if (inputString.toLowerCase().endsWith("d")) {
+                if (inputString.length() <= 1) {
+                    return originString;
+                }
+
+                int days = Integer.parseInt(inputString.substring(0, inputString.length() - 1));
+                return dayFormatter.format(DateUtils.addDays(new Date(), days));
+            } else if (inputString.toLowerCase().endsWith("h")) {
+                if (inputString.length() <= 1) {
+                    return originString;
+                }
+
+                int hours = Integer.parseInt(inputString.substring(0, inputString.length() - 1));
+                return hourFormatter.format(DateUtils.addHours(new Date(), hours));
+            } else {
+                return originString;
+            }
+        } catch (Exception e) {
+            return originString;
+        }
     }
 
     @RequestMapping(value = "/api/oauth/form", method = RequestMethod.POST)
     public ModelAndView oauthFormRedirect(@ModelAttribute OAuth2RequestDTO oAuth2RequestDTO) throws URISyntaxException {
-	List<String> scopes = oAuth2RequestDTO.getScopes();
-	String authorizationUrl = oAuth2RequestDTO.getAuthorizationUrl();
-	if (authorizationUrl == null || authorizationUrl.isEmpty()) {
-	    return null;
-	}
-	URIBuilder uriBuilder = new URIBuilder(authorizationUrl);
-	List<NameValuePair> queryParams = uriBuilder.getQueryParams();
-	List<String> responseTypes = new ArrayList<String>();
-	if (queryParams != null && !queryParams.isEmpty()) {
-	    for (NameValuePair nameValuePair : queryParams) {
-		if ("response_type".equals(nameValuePair.getName())) {
-		    responseTypes.add(nameValuePair.getValue());
-		    break;
-		}
-	    }
-	}
+        List<String> scopes = oAuth2RequestDTO.getScopes();
+        String authorizationUrl = oAuth2RequestDTO.getAuthorizationUrl();
+        if (authorizationUrl == null || authorizationUrl.isEmpty()) {
+            return null;
+        }
+        URIBuilder uriBuilder = new URIBuilder(authorizationUrl);
+        List<NameValuePair> queryParams = uriBuilder.getQueryParams();
+        List<String> responseTypes = new ArrayList<String>();
+        if (queryParams != null && !queryParams.isEmpty()) {
+            for (NameValuePair nameValuePair : queryParams) {
+                if ("response_type".equals(nameValuePair.getName())) {
+                    responseTypes.add(nameValuePair.getValue());
+                    break;
+                }
+            }
+        }
 
-	BrowserClientRequestUrl browserClientRequestUrl = new BrowserClientRequestUrl(authorizationUrl, oAuth2RequestDTO.getClientId());
-	if (!responseTypes.isEmpty()) {
-	    browserClientRequestUrl = browserClientRequestUrl.setResponseTypes(responseTypes);
-	}
-	String url = browserClientRequestUrl.setState(RESTFIDDLE).setScopes(scopes).setRedirectUri(HTTP_LOCALHOST_8080_OAUTH_RESPONSE).build();
+        BrowserClientRequestUrl browserClientRequestUrl = new BrowserClientRequestUrl(authorizationUrl, oAuth2RequestDTO.getClientId());
+        if (!responseTypes.isEmpty()) {
+            browserClientRequestUrl = browserClientRequestUrl.setResponseTypes(responseTypes);
+        }
+        String url = browserClientRequestUrl.setState(RESTFIDDLE).setScopes(scopes).setRedirectUri(HTTP_LOCALHOST_8080_OAUTH_RESPONSE).build();
 
-	return new ModelAndView("redirect:" + url);
+        return new ModelAndView("redirect:" + url);
     }
 
     @RequestMapping(value = "/oauth/demo-redirect", method = RequestMethod.GET)
     @Deprecated
     public ModelAndView oauthRedirect() {
-	List<String> scopes = new ArrayList<String>();
-	scopes.add("https://www.googleapis.com/auth/userinfo.profile");
-	String url = new BrowserClientRequestUrl("https://accounts.google.com/o/oauth2/auth",
-		"82089573969-nocs1ulh96n5kfut1bh5cq7n1enlfoe8.apps.googleusercontent.com").setState(RESTFIDDLE).setScopes(scopes)
-		.setRedirectUri(HTTP_LOCALHOST_8080_OAUTH_RESPONSE).build();
+        List<String> scopes = new ArrayList<String>();
+        scopes.add("https://www.googleapis.com/auth/userinfo.profile");
+        String url = new BrowserClientRequestUrl("https://accounts.google.com/o/oauth2/auth",
+                "82089573969-nocs1ulh96n5kfut1bh5cq7n1enlfoe8.apps.googleusercontent.com").setState(RESTFIDDLE).setScopes(scopes)
+                .setRedirectUri(HTTP_LOCALHOST_8080_OAUTH_RESPONSE).build();
 
-	return new ModelAndView("redirect:" + url);
+        return new ModelAndView("redirect:" + url);
     }
 
     @RequestMapping(value = "/api/oauth/redirect", method = RequestMethod.POST, headers = "Accept=application/json")
-    public @ResponseBody
+    public
+    @ResponseBody
     @Deprecated
     String oauth2Redirect(@RequestBody OAuth2RequestDTO oAuth2RequestDTO) {
-	List<String> scopes = oAuth2RequestDTO.getScopes();
-	String url = new BrowserClientRequestUrl(oAuth2RequestDTO.getAuthorizationUrl(), oAuth2RequestDTO.getClientId()).setState(RESTFIDDLE)
-		.setScopes(scopes).setRedirectUri(HTTP_LOCALHOST_8080_OAUTH_RESPONSE).build();
+        List<String> scopes = oAuth2RequestDTO.getScopes();
+        String url = new BrowserClientRequestUrl(oAuth2RequestDTO.getAuthorizationUrl(), oAuth2RequestDTO.getClientId()).setState(RESTFIDDLE)
+                .setScopes(scopes).setRedirectUri(HTTP_LOCALHOST_8080_OAUTH_RESPONSE).build();
 
-	return url;
+        return url;
     }
 }
